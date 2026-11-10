@@ -2,17 +2,22 @@
 -- Bayan Park, the covered court, the Bayan Public Market (business stalls) and houses.
 -- The workplaces (BakeryMap, MallMap, TownHallMap) stand at the ends of the roads:
 --
---                Bayan Mall (+Z)
+--                Bayan Mall (+Z)          Veterans Parc (NE)
 --                     |
---   Town Hall ---- Plaza (spawn) ---- Bakery & Public Market (+X)
+--   Town Hall ---- Town center ---- Bakery & Public Market ---- Rotonda (+X)
 --   (-X)  Park (NW)   |   Court (SE)
---                Houses & sari-sari store (-Z)
+--          Bayan Heights (-Z)   Bayan Heights II (SE)
+--
+-- The town center (spawn) is a walking plaza inside a ring road where the 4
+-- main roads meet (see buildPlaza).
 --
 -- Everything here is for looks and fun (benches, swings and bleachers can be
 -- sat on). Positions are world positions (studs from the spawn point).
 
 local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local GameClock = require(ReplicatedStorage.Shared.GameClock)
 local MapKit = require(script.Parent.MapKit)
 local Atmosphere = require(script.Parent.Atmosphere)
 
@@ -80,8 +85,9 @@ end
 
 -- A straight road with a dashed center line, sidewalks, lamps and trees.
 -- alongX = true: the road runs along X (from a to b) at z = c; else along Z at x = c.
--- options = { noTrees = true, treesUntil = number, sidewalkTop = number }
--- (treesUntil: no trees past this point; sidewalkTop helps where sidewalks cross)
+-- options = { noTrees = true, treesUntil = number, sidewalkTop = number, lampGaps = { { from, to } } }
+-- (treesUntil: no trees past this point; sidewalkTop helps where sidewalks cross;
+-- lampGaps: no lamp posts there, for example where a side road joins)
 local function road(model, alongX, a, b, c, width, options)
 	width = width or 20
 	options = options or {}
@@ -109,13 +115,21 @@ local function road(model, alongX, a, b, c, width, options)
 		-- never past the end of the road, and never on the main avenues' sidewalks
 		local lastTree = math.min(b - 3, options.treesUntil or math.huge)
 		local hasTree = not options.noTrees and treeAt <= lastTree and math.abs(treeAt) >= 16
+		local hasLamp = true
+		for _, gap in options.lampGaps or {} do
+			hasLamp = hasLamp and not (u >= gap[1] and u <= gap[2])
+		end
 		if alongX then
-			kit.lampPost(model, u, v1)
+			if hasLamp then
+				kit.lampPost(model, u, v1)
+			end
 			if hasTree then
 				kit.tree(model, treeAt, v2, 0.8)
 			end
 		else
-			kit.lampPost(model, v1, u)
+			if hasLamp then
+				kit.lampPost(model, v1, u)
+			end
 			if hasTree then
 				kit.tree(model, v2, treeAt, 0.8)
 			end
@@ -124,21 +138,105 @@ local function road(model, alongX, a, b, c, width, options)
 end
 
 ------------------------------------------------------------------------
--- Central plaza (spawn)
+-- Town center (spawn): a walking plaza (x and z from -38 to 38) inside a
+-- ring road (38..50) where the 4 main roads meet, with an outer sidewalk
+-- (50..54) and zebra crossings. The middle stays clear for the spawn point.
 ------------------------------------------------------------------------
 
-local function buildPlaza(model)
-	box(model, "Plaza", -30, 0, -30, 30, 0.15, 30, COLORS.plaza, Enum.Material.Brick)
-	box(model, "PlazaRing", -12, 0, 4, 12, 0.17, 28, COLORS.stone, Enum.Material.Marble)
+local PLAZA, RING, OUTER = 38, 50, 54
 
-	-- Fountain (north side, so the spawn stays clear)
-	local fz = 16
-	disc(model, "FountainBase", 0, fz, 0, 1.4, 12, COLORS.stone, Enum.Material.Marble)
-	local water = disc(model, "FountainWater", 0, fz, 1.2, 1.45, 10.6, COLORS.water, Enum.Material.Glass)
+-- Zebra stripes. acrossX = true: stripes run along X, spread from v1 to v2 on Z
+-- (a crossing over a road that runs along X); false: the other way round.
+local function zebra(model, acrossX, u1, u2, v1, v2)
+	for v = v1 + 0.6, v2 - 1.2, 1.6 do
+		if acrossX then
+			box(model, "ZebraStripe", u1 + 0.3, 0.12, v, u2 - 0.3, 0.14, v + 0.8, COLORS.white)
+		else
+			box(model, "ZebraStripe", v, 0.12, u1 + 0.3, v + 0.8, 0.14, u2 - 0.3, COLORS.white)
+		end
+	end
+end
+
+local function buildRingRoad(model)
+	local asphalt, material = COLORS.asphalt, Enum.Material.Asphalt
+	box(model, "RingRoad", -RING, 0, PLAZA, RING, 0.12, RING, asphalt, material) -- north side
+	box(model, "RingRoad", -RING, 0, -RING, RING, 0.12, -PLAZA, asphalt, material) -- south side
+	box(model, "RingRoad", -RING, 0, -PLAZA, -PLAZA, 0.12, PLAZA, asphalt, material) -- west side
+	box(model, "RingRoad", PLAZA, 0, -PLAZA, RING, 0.12, PLAZA, asphalt, material) -- east side
+	-- Dashed center line, away from the junctions and corners
+	local mid = (PLAZA + RING) / 2
+	for _, c in { -34, -26, -18, 18, 26, 34 } do
+		for _, side in { -1, 1 } do
+			box(model, "LaneLine", c - 2, 0.12, side * mid - 0.2, c + 2, 0.13, side * mid + 0.2, COLORS.line)
+			box(model, "LaneLine", side * mid - 0.2, 0.12, c - 2, side * mid + 0.2, 0.13, c + 2, COLORS.line)
+		end
+	end
+	for _, side in { -1, 1 } do
+		-- Curb around the plaza
+		box(model, "Curb", -PLAZA, 0, side * PLAZA - 0.15, PLAZA, 0.25, side * PLAZA + 0.15, COLORS.white)
+		box(model, "Curb", side * PLAZA - 0.15, 0, -PLAZA, side * PLAZA + 0.15, 0.25, PLAZA, COLORS.white)
+		-- Outer sidewalk (open where the roads join), with its curb
+		for _, seg in { { -OUTER, -10 }, { 10, OUTER } } do
+			box(model, "Sidewalk", seg[1], 0, side * RING, seg[2], 0.16, side * OUTER, COLORS.sidewalk, Enum.Material.Concrete)
+		end
+		for _, seg in { { -RING, -10 }, { 10, RING } } do
+			box(model, "Sidewalk", side * RING, 0, seg[1], side * OUTER, 0.16, seg[2], COLORS.sidewalk, Enum.Material.Concrete)
+			box(model, "Curb", seg[1], 0, side * (RING - 0.3), seg[2], 0.25, side * RING, COLORS.white)
+			box(model, "Curb", side * (RING - 0.3), 0, seg[1], side * RING, 0.25, seg[2], COLORS.white)
+		end
+		-- Zebra crossings in line with each road's sidewalks
+		local v1, v2 = math.min(side * PLAZA, side * RING), math.max(side * PLAZA, side * RING)
+		for _, u in { -14, 10 } do
+			zebra(model, true, u, u + 4, v1, v2) -- north / south sides
+			zebra(model, false, u, u + 4, v1, v2) -- west / east sides
+		end
+		-- Lamps on the outer corners
+		kit.lampPost(model, side * 52, 52)
+		kit.lampPost(model, side * 52, -52)
+	end
+end
+
+-- A street food cart facing its front (local -Z) the way of the angle.
+local function foodCart(model, x, z, angle, name, bodyColor, umbrellaColor)
+	local base = CFrame.new(x, 0, z) * CFrame.Angles(0, angle, 0)
+	local function at(dx, dy, dz)
+		return base * CFrame.new(dx, dy, dz)
+	end
+	part(model, "CartBody", Vector3.new(4, 2.4, 2.4), at(0, 2.2, 0), bodyColor)
+	local case = part(model, "CartCase", Vector3.new(3, 1, 1.8), at(0, 3.9, 0), Color3.fromRGB(190, 225, 240), Enum.Material.Glass)
+	case.Transparency = 0.4
+	for _, dz in { -1.3, 1.3 } do
+		local wheel = part(model, "CartWheel", Vector3.new(0.3, 1.6, 1.6), at(-1, 0.8, dz) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(30, 30, 30))
+		wheel.Shape = Enum.PartType.Cylinder
+	end
+	part(model, "CartLeg", Vector3.new(0.3, 1, 0.3), at(1.6, 0.5, 0), COLORS.metal, Enum.Material.Metal)
+	part(model, "UmbrellaPole", Vector3.new(0.2, 4.6, 0.2), at(1.3, 5.7, 0.6), COLORS.metal, Enum.Material.Metal)
+	local umbrella = part(model, "Umbrella", Vector3.new(0.3, 5, 5), at(1.3, 8.1, 0.6) * CFrame.Angles(0, 0, math.rad(90)), umbrellaColor, Enum.Material.Fabric)
+	umbrella.Shape = Enum.PartType.Cylinder
+	local sign = part(model, "CartSign", Vector3.new(3.6, 0.9, 0.1), at(0, 2.6, -1.26), COLORS.white)
+	surfaceText(sign, Enum.NormalId.Front, name, COLORS.metal)
+end
+
+local function buildPlaza(model)
+	buildRingRoad(model)
+	box(model, "Plaza", -PLAZA, 0, -PLAZA, PLAZA, 0.15, PLAZA, COLORS.plaza, Enum.Material.Brick)
+
+	-- Spawn medallion in the middle (kept clear)
+	disc(model, "SpawnMedallion", 0, 0, 0, 0.17, 16, COLORS.stone, Enum.Material.Marble)
+	disc(model, "SpawnMedallion", 0, 0, 0, 0.18, 12, Color3.fromRGB(190, 150, 120), Enum.Material.Brick)
+	disc(model, "SpawnMedallion", 0, 0, 0, 0.19, 4, COLORS.yellow, Enum.Material.Marble)
+
+	-- Fountain (north side, so the spawn stays clear): two bowls and a spray
+	local fz = 20
+	disc(model, "FountainPaving", 0, fz, 0, 0.17, 22, COLORS.stone, Enum.Material.Marble)
+	disc(model, "FountainBase", 0, fz, 0, 1.6, 16, COLORS.stone, Enum.Material.Marble)
+	local water = disc(model, "FountainWater", 0, fz, 1.3, 1.65, 14.6, COLORS.water, Enum.Material.Glass)
 	water.Transparency = 0.25
-	pillar(model, "FountainColumn", 0, fz, 1.4, 5, 1.2, COLORS.stone, Enum.Material.Marble)
-	disc(model, "FountainBowl", 0, fz, 5, 5.6, 4.5, COLORS.stone, Enum.Material.Marble)
-	local jet = pillar(model, "FountainJet", 0, fz, 5.6, 8, 0.6, Color3.fromRGB(170, 220, 255), Enum.Material.Neon)
+	pillar(model, "FountainColumn", 0, fz, 1.6, 6, 1.4, COLORS.stone, Enum.Material.Marble)
+	disc(model, "FountainBowl", 0, fz, 6, 6.6, 6, COLORS.stone, Enum.Material.Marble)
+	pillar(model, "FountainColumn", 0, fz, 6.6, 8.6, 0.8, COLORS.stone, Enum.Material.Marble)
+	disc(model, "FountainBowl", 0, fz, 8.6, 9.1, 3.2, COLORS.stone, Enum.Material.Marble)
+	local jet = pillar(model, "FountainJet", 0, fz, 9.1, 11.2, 0.6, Color3.fromRGB(170, 220, 255), Enum.Material.Neon)
 	jet.Transparency = 0.3
 	jet.CanCollide = false
 
@@ -163,57 +261,148 @@ local function buildPlaza(model)
 	spray.Parent = spout
 	Atmosphere.loopSound(jet, "fountain", 0.4, 40)
 
-	-- Gazebo (west side)
-	local gx, gz = -18, -12
-	box(model, "GazeboFloor", gx - 6, 0, gz - 6, gx + 6, 0.35, gz + 6, COLORS.wood, Enum.Material.WoodPlanks)
-	for _, dx in { -5, 5 } do
-		for _, dz in { -5, 5 } do
-			pillar(model, "GazeboPost", gx + dx, gz + dz, 0.35, 8, 0.6, COLORS.white)
+	-- Benches and flower beds around the fountain
+	kit.bench(model, -12, 0.17, fz, -math.pi / 2)
+	kit.bench(model, 12, 0.17, fz, math.pi / 2)
+	kit.bench(model, -5, 0.17, fz + 11, 0)
+	kit.bench(model, 5, 0.17, fz + 11, 0)
+	local flowers = { Color3.fromRGB(240, 110, 150), Color3.fromRGB(250, 210, 70), Color3.fromRGB(245, 245, 245), Color3.fromRGB(200, 90, 200) }
+	for i, spot in { { -11, fz - 9 }, { 11, fz - 9 }, { -11, fz + 9 }, { 11, fz + 9 } } do
+		box(model, "FlowerBed", spot[1] - 2, 0, spot[2] - 2, spot[1] + 2, 0.6, spot[2] + 2, COLORS.darkWood, Enum.Material.Wood)
+		for dx = -1.2, 1.2, 1.2 do
+			for dz = -1.2, 1.2, 1.2 do
+				ball(model, "Flower", 0.8, spot[1] + dx, 0.9, spot[2] + dz, flowers[(i + math.floor(dx + dz)) % #flowers + 1])
+			end
 		end
 	end
-	for i, size in { 13, 10, 7, 4 } do
-		local y = 8 + (i - 1) * 0.6
-		box(model, "GazeboRoof", gx - size / 2, y, gz - size / 2, gx + size / 2, y + 0.6, gz + size / 2, COLORS.red, Enum.Material.Slate)
-	end
-	kit.bench(model, gx, 0.35, gz + 3.5, math.pi)
 
-	-- Jeepney waiting shed (east side, for the future Jeepney Driver job)
-	local sx, sz = 20, -18
-	for _, dx in { -5, 5 } do
-		for _, dz in { -2, 2 } do
-			pillar(model, "ShedPost", sx + dx, sz + dz, 0, 8, 0.4, COLORS.metal, Enum.Material.Metal)
+	-- Gazebo (west side), open toward the plaza, with benches and a lamp
+	local gx, gz = -24, -4
+	box(model, "GazeboFloor", gx - 8, 0, gz - 8, gx + 8, 0.4, gz + 8, COLORS.wood, Enum.Material.WoodPlanks)
+	box(model, "GazeboStep", gx + 8, 0, gz - 3, gx + 9.5, 0.2, gz + 3, COLORS.stone, Enum.Material.Concrete)
+	for _, dx in { -7, 7 } do
+		for _, dz in { -7, 7 } do
+			pillar(model, "GazeboPost", gx + dx, gz + dz, 0.4, 9, 0.7, COLORS.white)
 		end
 	end
-	box(model, "ShedRoof", sx - 6.5, 8, sz - 3, sx + 6.5, 8.4, sz + 3, COLORS.blue, Enum.Material.Metal)
-	kit.bench(model, sx, 0.15, sz - 0.5, math.pi)
-	signBoard(model, "🚏 JEEPNEY TERMINAL\n(coming soon)", sx, 9.6, sz + 3, 10, 2, 0, COLORS.blue)
+	box(model, "GazeboRail", gx - 7, 2.4, gz - 7.1, gx + 7, 2.6, gz - 6.9, COLORS.white)
+	box(model, "GazeboRail", gx - 7, 2.4, gz + 6.9, gx + 7, 2.6, gz + 7.1, COLORS.white)
+	box(model, "GazeboRail", gx - 7.1, 2.4, gz - 7, gx - 6.9, 2.6, gz + 7, COLORS.white)
+	for i, size in { 19, 15, 11, 7, 3 } do
+		local y = 9 + (i - 1) * 0.7
+		box(model, "GazeboRoof", gx - size / 2, y, gz - size / 2, gx + size / 2, y + 0.7, gz + size / 2, COLORS.red, Enum.Material.Slate)
+	end
+	ball(model, "GazeboTop", 1, gx, 12.9, gz, COLORS.yellow)
+	kit.bench(model, gx, 0.4, gz - 4, math.pi)
+	kit.bench(model, gx, 0.4, gz + 4, 0)
+	kit.lamp(model, gx, 8.99, gz)
 
-	-- Welcome arch at the south entrance
-	pillar(model, "ArchPillar", -12, -29, 0, 14, 2, COLORS.stone, Enum.Material.Marble)
-	pillar(model, "ArchPillar", 12, -29, 0, 14, 2, COLORS.stone, Enum.Material.Marble)
-	local arch = box(model, "ArchBeam", -14, 14, -30, 14, 17.5, -28, COLORS.green)
+	-- Clock tower (north-east corner): its 4 faces show the game time
+	local cx, cz = 27, 27
+	local cream = Color3.fromRGB(240, 232, 214)
+	box(model, "ClockTowerBase", cx - 5, 0, cz - 5, cx + 5, 1, cz + 5, COLORS.stone, Enum.Material.Marble)
+	box(model, "ClockTower", cx - 3, 1, cz - 3, cx + 3, 24, cz + 3, cream, Enum.Material.Plaster)
+	box(model, "ClockTowerBand", cx - 3.4, 12, cz - 3.4, cx + 3.4, 12.6, cz + 3.4, COLORS.stone, Enum.Material.Marble)
+	box(model, "ClockRoom", cx - 3.6, 24, cz - 3.6, cx + 3.6, 31, cz + 3.6, cream, Enum.Material.Plaster)
+	for i, size in { 8.4, 6.4, 4.4, 2.4 } do
+		local y = 31 + (i - 1) * 0.9
+		box(model, "ClockTowerRoof", cx - size / 2, y, cz - size / 2, cx + size / 2, y + 0.9, cz + size / 2, COLORS.red, Enum.Material.Slate)
+	end
+	ball(model, "ClockTowerTop", 1.2, cx, 35.2, cz, COLORS.yellow, Enum.Material.Neon)
+	local clockFaces, clockTexts = {}, {}
+	for _, dir in { Vector3.new(0, 0, 1), Vector3.new(0, 0, -1), Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0) } do
+		local center = Vector3.new(cx, 27.5, cz) + dir * 3.7
+		local face = part(model, "ClockFace", Vector3.new(0.2, 5.4, 5.4), CFrame.new(center) * CFrame.Angles(0, math.atan2(-dir.Z, dir.X), 0), COLORS.white)
+		face.Shape = Enum.PartType.Cylinder -- its round end (local +X) faces out
+		table.insert(clockFaces, face)
+		table.insert(clockTexts, surfaceText(face, Enum.NormalId.Right, "6:00 AM", COLORS.metal))
+	end
+	task.spawn(function()
+		while clockFaces[1].Parent do
+			local now = GameClock.format(GameClock.hour(workspace:GetServerTimeNow()))
+			for _, label in clockTexts do
+				label.Text = now
+			end
+			task.wait(1)
+		end
+	end)
+
+	-- Street food carts (north-west), facing the fountain, with benches
+	foodCart(model, -28, 14, -math.pi / 2, "🥛 TAHO", Color3.fromRGB(150, 100, 60), Color3.fromRGB(240, 220, 160))
+	foodCart(model, -28, 22, -math.pi / 2, "🍦 SORBETES", Color3.fromRGB(240, 70, 60), Color3.fromRGB(250, 210, 60))
+	foodCart(model, -28, 30, -math.pi / 2, "🍢 FISHBALL", Color3.fromRGB(245, 160, 50), Color3.fromRGB(70, 140, 220))
+	kit.bench(model, -20, 0.15, 18, math.pi / 2)
+	kit.bench(model, -20, 0.15, 26, math.pi / 2)
+
+	-- Jeepney terminal (east side, for the future Jeepney Driver job), with a
+	-- stop marked on the ring road beside it
+	for _, px in { 30, 37 } do
+		for _, pz in { -30, -24, -18 } do
+			pillar(model, "ShedPost", px, pz, 0, 8, 0.4, COLORS.metal, Enum.Material.Metal)
+		end
+	end
+	box(model, "ShedRoof", 29.2, 8, -31, 37.8, 8.4, -17, COLORS.blue, Enum.Material.Metal)
+	kit.bench(model, 32, 0.15, -27, -math.pi / 2)
+	kit.bench(model, 32, 0.15, -21, -math.pi / 2)
+	signBoard(model, "🚏 JEEPNEY TERMINAL\n(coming soon)", 33.5, 9.6, -24, 12, 2, math.pi / 2, COLORS.blue)
+	box(model, "JeepneyStopLine", 38.6, 0.12, -30, 43.4, 0.135, -29.7, COLORS.yellow)
+	box(model, "JeepneyStopLine", 38.6, 0.12, -17.3, 43.4, 0.135, -17, COLORS.yellow)
+	box(model, "JeepneyStopLine", 43.1, 0.12, -30, 43.4, 0.135, -17, COLORS.yellow)
+
+	-- Trees in planters (south corners) and benches facing the middle
+	for _, spot in { { -28, -28 }, { 24, -30 } } do
+		disc(model, "Planter", spot[1], spot[2], 0, 1, 6, COLORS.stone, Enum.Material.Concrete)
+		disc(model, "PlanterSoil", spot[1], spot[2], 0, 1.1, 5.2, COLORS.grass, Enum.Material.Grass)
+		kit.tree(model, spot[1], spot[2], 1.1)
+	end
+	kit.bench(model, -8, 0.15, -30, math.pi)
+	kit.bench(model, 8, 0.15, -30, math.pi)
+
+	-- Low hedges along the plaza edge, open at the crossings and the jeepney terminal
+	for _, side in { -1, 1 } do
+		for _, seg in { { -35, -17 }, { 17, 35 } } do
+			box(model, "Hedge", seg[1], 0, side * 35.5, seg[2], 1.4, side * 36.5, COLORS.green, Enum.Material.Grass)
+			if not (side == 1 and seg[2] < 0) then
+				box(model, "Hedge", side * 35.5, 0, seg[1], side * 36.5, 1.4, seg[2], COLORS.green, Enum.Material.Grass)
+			end
+		end
+	end
+	for _, spot in { { -15.5, 36 }, { 15.5, 36 }, { -15.5, -36 }, { 15.5, -36 }, { -36, 15.5 }, { -36, -15.5 }, { 36, 15.5 }, { -36, 36 }, { 36, 36 }, { -36, -36 }, { 36, -36 } } do
+		kit.lampPost(model, spot[1], spot[2])
+	end
+
+	-- Signpost (south of the spawn): one blade per place, pointing its real way
+	local px, pz = 0, -16
+	pillar(model, "SignpostPole", px, pz, 0, 13.5, 0.5, COLORS.metal, Enum.Material.Metal)
+	ball(model, "SignpostTop", 1, px, 13.8, pz, COLORS.yellow)
+	local places = {
+		{ "🛍️ Bayan Mall", 0, 146 },
+		{ "🏰 Veterans Parc", 120, 100 },
+		{ "🍞 Bakery & 🏪 Market", 137, 34 },
+		{ "⭕ Rotonda", 206, 0 },
+		{ "🏘️ Heights II", 150, -92 },
+		{ "🏀 Covered Court", 76, -71 },
+		{ "🏘️ Bayan Heights", 0, -92 },
+		{ "🏛️ Town Hall", -150, 0 },
+		{ "🌳 Bayan Park", -89, 75 },
+	}
+	for i, place in places do
+		local yaw = math.atan2(-(place[3] - pz), place[2] - px)
+		local frame = CFrame.new(px, 12.6 - (i - 1) * 1.1, pz) * CFrame.Angles(0, yaw, 0)
+		local blade = part(model, "SignBlade", Vector3.new(7, 0.9, 0.2), frame * CFrame.new(3.8, 0, 0), COLORS.green)
+		blade.CanCollide = false
+		surfaceText(blade, Enum.NormalId.Front, place[1], COLORS.white)
+		surfaceText(blade, Enum.NormalId.Back, place[1], COLORS.white)
+		local tip = part(model, "SignTip", Vector3.new(0.7, 0.9, 0.25), frame * CFrame.new(7.65, 0, 0), COLORS.yellow)
+		tip.CanCollide = false
+	end
+
+	-- Welcome arch over the south road, just outside the ring
+	pillar(model, "ArchPillar", -12, -58, 0, 14, 2, COLORS.stone, Enum.Material.Marble)
+	pillar(model, "ArchPillar", 12, -58, 0, 14, 2, COLORS.stone, Enum.Material.Marble)
+	local arch = box(model, "ArchBeam", -14, 14, -59, 14, 17.5, -57, COLORS.green)
 	surfaceText(arch, Enum.NormalId.Front, "WELCOME TO BAYAN", COLORS.yellow)
 	surfaceText(arch, Enum.NormalId.Back, "MABUHAY! WELCOME TO BAYAN", COLORS.yellow)
-
-	-- Benches around the fountain and lamp posts at the corners
-	kit.bench(model, -10, 0.17, 16, -math.pi / 2)
-	kit.bench(model, 10, 0.17, 16, math.pi / 2)
-	for _, x in { -27, 27 } do
-		for _, z in { -27, 27 } do
-			kit.lampPost(model, x, z)
-		end
-	end
-
-	-- Direction signs where the roads leave the plaza (readable from the plaza)
-	signBoard(model, "🏛️ TOWN HALL  ←", -31, 6, 14, 12, 2.5, math.pi / 2)
-	signBoard(model, "🍞 BAKERY & 🏪 MARKET  →", 31, 6, 14, 14, 2.5, math.pi / 2)
-	signBoard(model, "🛍️ BAYAN MALL  ↑", -14, 6, 31, 12, 2.5, 0)
-	signBoard(model, "🌳 BAYAN PARK  ↖", -20, 9, 31, 12, 2.5, 0)
-	signBoard(model, "🏘️ BAYAN HEIGHTS  ↓", 14, 6, -31, 14, 2.5, 0)
-	signBoard(model, "🏀 COVERED COURT  ↘", 20, 9, -31, 12, 2.5, 0)
-	for _, spot in { { -31, 14 }, { 31, 14 }, { -14, 31 }, { 14, -31 } } do
-		pillar(model, "SignPole", spot[1], spot[2], 0, 5, 0.3, COLORS.metal, Enum.Material.Metal)
-	end
 end
 
 ------------------------------------------------------------------------
@@ -1271,7 +1460,10 @@ local function buildVeteransParc(model)
 	local x1, x2, z1, z2 = 120, 264, 63, 230
 	-- Access road from the mall avenue, through the gate, and down the main drive
 	road(model, true, 14, 206, 100, 14, { noTrees = true })
-	signBoard(model, "🏰 VETERANS PARC  →", 16, 6, 112.5, 12, 2, 0, COLORS.green)
+	-- The arrow points east from both sides (the back is read by people walking south)
+	local parcSign = part(model, "SignBoard", Vector3.new(12, 2, 0.3), CFrame.new(16, 6, 112.5), COLORS.green)
+	surfaceText(parcSign, Enum.NormalId.Front, "🏰 VETERANS PARC  →", COLORS.white)
+	surfaceText(parcSign, Enum.NormalId.Back, "←  🏰 VETERANS PARC", COLORS.white)
 	pillar(model, "SignPole", 16, 112.5, 0, 5, 0.3, COLORS.metal, Enum.Material.Metal)
 
 	-- Walls and the grand gate (on the west side, facing the access road)
@@ -1384,15 +1576,20 @@ local function build()
 	local model = Instance.new("Model")
 	model.Name = "City"
 	buildGround(model)
-	-- Main roads from the plaza to each workplace
-	road(model, true, -84, -30, 0) -- west to the Town Hall
-	road(model, true, 30, 184, 0, 20, { treesUntil = 90 }) -- east, past the market and the bakery
+	-- Main roads from the town center's ring road (|x| or |z| = 50) to each place
+	road(model, true, -84, -50, 0) -- west to the Town Hall
+	road(model, true, 50, 184, 0, 20, { treesUntil = 90, lampGaps = { { 108, 130 } } }) -- east, past the market and bakery
 	buildRotonda(model) -- the loop at its end
-	road(model, false, 30, 112, 0) -- north to the mall
-	road(model, false, -92, -30, 0) -- south to the Bayan Heights gate
+	road(model, false, 50, 112, 0, 20, { treesUntil = 85 }) -- north to the mall
+	road(model, false, -92, -50, 0) -- south to the Bayan Heights gate
 	buildPlaza(model)
-	buildPark(model)
-	buildCourt(model)
+	-- Bayan Park sits 14 studs west of where it was first built, to make room for the town center
+	local park = Instance.new("Model")
+	park.Name = "BayanPark"
+	park.Parent = model
+	buildPark(park)
+	park:PivotTo(park:GetPivot() + Vector3.new(-14, 0, 0))
+	buildCourt(model, 56, -84) -- south-east, clear of the town center
 	buildMarket(model)
 	buildSubdivision(model)
 	buildHeightsII(model)
@@ -1414,15 +1611,17 @@ function CityMap.getOrBuild()
 		adminHouse = adminHouse,
 		leasing = leasingOffices,
 		litterAreas = {
-			{ cframe = CFrame.new(0, 0, -10), sizeX = 54, sizeZ = 36 }, -- plaza (south half)
-			{ cframe = CFrame.new(-57, 0, 0), sizeX = 54, sizeZ = 26 }, -- west road
-			{ cframe = CFrame.new(107, 0, 0), sizeX = 154, sizeZ = 26 }, -- east road (to the bakery)
-			{ cframe = CFrame.new(0, 0, 71), sizeX = 26, sizeZ = 82 }, -- north road
-			{ cframe = CFrame.new(0, 0, -72), sizeX = 26, sizeZ = 84 }, -- south road
+			{ cframe = CFrame.new(0, 0, -21), sizeX = 28, sizeZ = 30 }, -- plaza (south part, open paving)
+			{ cframe = CFrame.new(0, 0, 44), sizeX = 96, sizeZ = 10 }, -- ring road (north side)
+			{ cframe = CFrame.new(0, 0, -44), sizeX = 96, sizeZ = 10 }, -- ring road (south side)
+			{ cframe = CFrame.new(-67, 0, 0), sizeX = 34, sizeZ = 26 }, -- west road
+			{ cframe = CFrame.new(117, 0, 0), sizeX = 134, sizeZ = 26 }, -- east road (to the bakery)
+			{ cframe = CFrame.new(0, 0, 81), sizeX = 26, sizeZ = 62 }, -- north road
+			{ cframe = CFrame.new(0, 0, -71), sizeX = 26, sizeZ = 42 }, -- south road
 			{ cframe = CFrame.new(0, 0, -256), sizeX = 26, sizeZ = 320 }, -- Rizal Avenue (Bayan Heights)
 			{ cframe = CFrame.new(0, 0, -130), sizeX = 240, sizeZ = 16 }, -- Sampaguita St.
 			{ cframe = CFrame.new(0, 0, -258), sizeX = 240, sizeZ = 16 }, -- Mabini St.
-			{ cframe = CFrame.new(-75, 0, 75), sizeX = 60, sizeZ = 60 }, -- park
+			{ cframe = CFrame.new(-89, 0, 75), sizeX = 60, sizeZ = 60 }, -- park (moved 14 west)
 			{ cframe = CFrame.new(115, 0, 40), sizeX = 13, sizeZ = 36 }, -- market aisle
 			{ cframe = CFrame.new(0, 0, 129), sizeX = 160, sizeZ = 12 }, -- mall parking lane
 		},

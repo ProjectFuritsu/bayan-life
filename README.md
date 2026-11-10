@@ -14,8 +14,12 @@ Notes and design: `Fritz Knowledge/01-projects/bayan-life/bayan-life.md`
 ```
 - Each workplace is about 140 studs from the plaza (a 10-second walk), connected by roads with lane lines,
   sidewalks, street lamps and trees.
-- **Central plaza:** spawn, fountain, gazebo, welcome arch, benches, jeepney waiting shed (for the future Jeepney
-  Driver job) and direction signs.
+- **Town center (spawn):** a 76×76 walking plaza inside a **ring road** where the 4 main roads meet, with an outer
+  sidewalk, curbs and 8 zebra crossings. Inside: a spawn medallion (kept clear), a two-bowl fountain with benches and
+  flower beds, a big gazebo, a **clock tower** whose 4 faces show the game time, **food carts** (taho, sorbetes,
+  fishball), a jeepney terminal with a marked stop on the ring road (for the future Jeepney Driver job), trees in
+  planters, low hedges, lamps, and a **signpost** whose blades point to every place in its real direction.
+  The "Welcome to Bayan" arch stands over the south road. The park and the court moved a little to make room.
 - **Bayan Park:** walking paths, pond, playground (slide, swings you can sit on, see-saw, sandbox), bahay kubo,
   flower beds, picnic tables.
 - **Barangay covered court** with hoops and bleachers.
