@@ -1,0 +1,2 @@
+# Same line endings (LF) on every computer, so diffs only show real changes
+* text=auto eol=lf
