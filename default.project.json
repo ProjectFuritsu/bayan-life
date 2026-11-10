@@ -1,0 +1,116 @@
+{
+  "name": "bayan-life",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "JobState": {
+          "$className": "RemoteEvent"
+        },
+        "Notify": {
+          "$className": "RemoteEvent"
+        },
+        "OpenOvenMenu": {
+          "$className": "RemoteEvent"
+        },
+        "BakeRequest": {
+          "$className": "RemoteEvent"
+        },
+        "DtrData": {
+          "$className": "RemoteEvent"
+        },
+        "OpenOrderMenu": {
+          "$className": "RemoteEvent"
+        },
+        "PlaceOrder": {
+          "$className": "RemoteEvent"
+        },
+        "CustomerState": {
+          "$className": "RemoteEvent"
+        },
+        "BagData": {
+          "$className": "RemoteEvent"
+        },
+        "EatRequest": {
+          "$className": "RemoteEvent"
+        },
+        "OpenQuiz": {
+          "$className": "RemoteEvent"
+        },
+        "SubmitQuiz": {
+          "$className": "RemoteEvent"
+        },
+        "QuizResult": {
+          "$className": "RemoteEvent"
+        },
+        "OpenJobMenu": {
+          "$className": "RemoteEvent"
+        },
+        "SubmitApplication": {
+          "$className": "RemoteEvent"
+        },
+        "EmployeeData": {
+          "$className": "RemoteEvent"
+        },
+        "QueueState": {
+          "$className": "RemoteEvent"
+        },
+        "WorkState": {
+          "$className": "RemoteEvent"
+        },
+        "ReviewRequest": {
+          "$className": "RemoteEvent"
+        },
+        "ReviewDecision": {
+          "$className": "RemoteEvent"
+        },
+        "ReviewClosed": {
+          "$className": "RemoteEvent"
+        },
+        "OpenPermitForm": {
+          "$className": "RemoteEvent"
+        },
+        "SubmitPermit": {
+          "$className": "RemoteEvent"
+        },
+        "PayData": {
+          "$className": "RemoteEvent"
+        },
+        "TutorialDone": {
+          "$className": "RemoteEvent"
+        },
+        "FridgeData": {
+          "$className": "RemoteEvent"
+        },
+        "OpenFridge": {
+          "$className": "RemoteEvent"
+        },
+        "FridgeAction": {
+          "$className": "RemoteEvent"
+        },
+        "ScreenFade": {
+          "$className": "RemoteEvent"
+        },
+        "Announce": {
+          "$className": "RemoteEvent"
+        }
+      }
+    },
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    }
+  }
+}

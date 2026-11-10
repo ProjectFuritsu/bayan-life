@@ -1,0 +1,13 @@
+# Built or saved place files
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+*.lock
+
+# Tool output
+sourcemap.json
+
+# System files
+Thumbs.db
+.DS_Store
